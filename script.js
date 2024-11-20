@@ -1,6 +1,15 @@
+function logMessage(message, type = "info") {
+  const logScreen = document.getElementById("logScreen");
+  const logEntry = document.createElement("p");
+  logEntry.className = `log-message ${type}`;
+  logEntry.textContent = message;
+
+  logScreen.appendChild(logEntry);
+  logScreen.scrollTop = logScreen.scrollHeight; // Auto-scroll to the latest log
+}
+
 document.getElementById("uploadForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-
   const owner = document.getElementById("owner").value;
   const repo = document.getElementById("repo").value;
   const branch = document.getElementById("branch").value || "main";
@@ -8,6 +17,7 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
   const files = document.getElementById("files").files;
 
   if (!files.length) {
+    logMessage("No files selected. Please select at least one file.", "error");
     alert("Please select at least one file.");
     return;
   }
@@ -17,79 +27,89 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
   const progressBar = document.getElementById("progressBar");
   const progressPercent = document.getElementById("progressPercent");
 
-  progressWrapper.style.display = "block";  // Show progress bar
-
-  statusDiv.innerHTML = "<p>Uploading...</p>";
+  progressWrapper.style.display = "block"; // Show progress bar
+  logMessage(`Uploading...`,"info");
 
   let totalFiles = files.length;
   let uploadedFiles = 0;
 
   try {
     for (const file of files) {
-      const fileContent = await file.text();
-      const encodedContent = btoa(fileContent);
-      const fileName = file.name;
-
-      // Step 1: Check if the file already exists on GitHub
-      const fileSha = await getFileSha(owner, repo, fileName, branch, token);
-      
-      if (fileSha) {
-        // Step 2: Compare the existing file's content (SHA) with the new content
-        const newSha = await getSHA(fileContent);
-        if (newSha === fileSha) {
-          statusDiv.innerHTML += `<p class="success">✅ No changes detected for ${fileName}. Skipping upload.</p>`;
-          continue; // Skip upload if the file content is identical
-        }
-      }
-
-      // Step 3: Upload or overwrite the file using XMLHttpRequest
-      const uploadUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${fileName}`;
-      const xhr = new XMLHttpRequest();
-      
-      xhr.open("PUT", uploadUrl);
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      xhr.setRequestHeader("Accept", "application/vnd.github+json");
-
-      // Track progress
-      xhr.upload.addEventListener("progress", function(event) {
-        if (event.lengthComputable) {
-          const percent = (event.loaded / event.total) * 100;
-          progressBar.value = percent;
-          progressPercent.textContent = `${Math.round(percent)}%`;
-        }
-      });
-
-      // Handle the response from GitHub API
-      xhr.onload = async function() {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status === 201 || xhr.status === 200) {
+      if (file.size > 99 * 1024 * 1024) {
+        // File size exceeds 99MB; split and upload in newline-safe chunks
+        const chunks = await splitFileByLine(file, 50 * 1024 * 1024); // 50MB
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const chunkName = `${file.name}.part${i + 1}`;
+          logMessage(`File size more than 25MB, splitting file: ${chunkName}`,"error");
           uploadedFiles++;
-          statusDiv.innerHTML += `<p class="success">✅ Uploaded: ${fileName}</p>`;
-        } else {
-          statusDiv.innerHTML += `<p class="error">❌ Failed to upload ${fileName}: ${data.message}</p>`;
+          await uploadFile(owner, repo, branch, token, chunkName, chunk, statusDiv, progressBar, progressPercent, totalFiles, uploadedFiles);
         }
-
-        // Update overall progress
-        const overallProgress = (uploadedFiles / totalFiles) * 100;
-        progressBar.value = overallProgress;
-        progressPercent.textContent = `${Math.round(overallProgress)}%`;
-      };
-
-      // Prepare the payload and send the request
-      const payload = JSON.stringify({
-        message: `Upload/Overwrite ${fileName}`,
-        content: encodedContent,
-        branch: branch,
-        sha: fileSha || undefined, // Include SHA to overwrite if the file exists
-      });
-      
-      xhr.send(payload);
+      } else {
+        // File size is below 99MB; upload directly
+        uploadedFiles++;
+        await uploadFile(owner, repo, branch, token, file.name, file, statusDiv, progressBar, progressPercent, totalFiles, uploadedFiles);
+      }
     }
+    logMessage("Completed","complete")
   } catch (error) {
-    console.error("Error uploading files:", error);
-    statusDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+    logMessage(`Error: ${error.message}`,"error");
   }
 });
+
+// Function to split a file into chunks
+async function splitFile(file, chunkSize) {
+  const chunks = [];
+  const totalChunks = Math.ceil(file.size / chunkSize);
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, file.size);
+    const chunk = file.slice(start, end); // Get a slice of the file
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+// Function to upload a file or chunk
+async function uploadFile(owner, repo, branch, token, fileName, fileContent, statusDiv, progressBar, progressPercent, totalFiles, uploadedFiles) {
+  const fileText = await fileContent.text();
+  const encodedContent = btoa(fileText);
+
+  // Check if the file exists and get its SHA
+  const fileSha = await getFileSha(owner, repo, fileName, branch, token);
+
+  // Upload or overwrite the file
+  const uploadUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${fileName}`;
+  const payload = JSON.stringify({
+    message: `Upload/Overwrite ${fileName}`,
+    content: encodedContent,
+    branch: branch,
+    sha: fileSha || undefined, // Include SHA to overwrite if the file exists
+  });
+
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+    },
+    body: payload,
+  });
+
+  const data = await response.json();
+  if (response.ok) {
+    logMessage(`Uploaded: ${fileName}`,"success");
+  } else {
+    logMessage(`Failed to upload ${fileName}: ${data.message}`,"error");
+  }
+
+  // Update overall progress
+  const overallProgress = (uploadedFiles / totalFiles) * 100;
+  progressBar.value = overallProgress;
+  progressPercent.textContent = `${Math.round(overallProgress)}%`;
+}
 
 // Function to get the SHA of an existing file in the repository
 async function getFileSha(owner, repo, fileName, branch, token) {
@@ -114,15 +134,4 @@ async function getFileSha(owner, repo, fileName, branch, token) {
     console.error("Error fetching file SHA:", error);
     throw error;
   }
-}
-
-// Function to calculate SHA for file content (for comparison)
-function getSHA(content) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  return crypto.subtle.digest("SHA-1", data).then((hashBuffer) => {
-    const hashArray = Array.from(new Uint8Array(hashBuffer)); // Convert buffer to byte array
-    const hashHex = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
-    return hashHex;
-  });
 }
