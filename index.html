@@ -1,45 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub File Uploader</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div class="container">
-    <h1>GitHub File Uploader</h1>
-    <form id="uploadForm">
-      <label for="owner">GitHub Username:</label>
-      <input type="text" id="owner" placeholder="Enter GitHub username" value = "mithunkr00808" required>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>GitHub File Uploader</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<div class="container">
+			<h1>GitHub File Uploader</h1>
+			<form id="uploadForm">
+				<label for="owner">GitHub Username:</label>
+				<input
+					type="text"
+					id="owner"
+					placeholder="Enter GitHub username"
+					value="mithunkr00808"
+					required
+				/>
 
-      <label for="repo">Repository Name:</label>
-      <input type="text" id="repo" placeholder="Enter repository name" value = "master"  required>
+				<label for="repo">Repository Name:</label>
+				<input
+					type="text"
+					id="repo"
+					placeholder="Enter repository name"
+					value="master"
+					required
+				/>
 
-      <label for="branch">Branch Name:</label>
-      <input type="text" id="branch" value="master" required>
+				<label for="branch">Branch Name:</label>
+				<input type="text" id="branch" value="master" required />
 
-      <label for="token">Personal Access Token:</label>
-      <input type="password" id="token" placeholder="Enter your token" required>
+				<label for="token">Personal Access Token:</label>
+				<input
+					type="password"
+					id="token"
+					placeholder="Enter your token"
+					required
+				/>
 
-      <label for="files">Select Files:</label>
-      <input type="file" id="files" multiple required>
+				<label for="files">Select Files:</label>
+				<input type="file" id="files" multiple required />
 
-      <button type="submit">Upload Files</button>
-    </form>
+				<button type="submit">Upload Files</button>
+			</form>
 
-    <!-- Progress bar -->
-    <div id="progressWrapper" style="display: none;">
-      <label for="progressBar">Upload Progress:</label>
-      <progress id="progressBar" value="0" max="100"></progress>
-      <span id="progressPercent">0%</span>
-    </div>
+			<!-- Progress bar -->
+			<div id="progressWrapper" style="display: none">
+				<label for="progressBar">Upload Progress:</label>
+				<progress id="progressBar" value="0" max="100"></progress>
+				<span id="progressPercent">0%</span>
+			</div>
 
-  <div id="status"></div>
-  </div>
-  <div id="logScreen">
-    <p class="rand">Logs:</p>
-  </div>
-  <script src="script.js"></script>
-</body>
+			<div id="status"></div>
+		</div>
+		<div id="logScreen">
+			<p class="rand">Logs:</p>
+		</div>
+		<script src="script.js"></script>
+	</body>
 </html>
